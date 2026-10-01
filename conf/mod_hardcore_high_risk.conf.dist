@@ -1,0 +1,102 @@
+#
+# Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
+#
+
+[worldserver]
+
+########################################
+# mod-hardcore-high-risk
+########################################
+#
+# Requires mod-challenge-modes and PlayerSettings.Enable = 1 in worldserver.conf.
+# "Hardcore" means the challenge-modes hardcore flag (Shrine of Challenge) or one of the force options below.
+#
+#    HardcoreHighRisk.Enable
+#        Description: Master switch for the whole module.
+#        Default:     1 - Enabled
+#                     0 - Disabled
+#
+
+HardcoreHighRisk.Enable = 1
+
+#
+#    HardcoreHighRisk.LootDrop.Enable
+#        Description: When a hardcore character dies, everything it carried drops into chests next to the body.
+#                     Equipped gear (and gold) goes into "Gear of the Fallen" chests, bags and their contents into
+#                     "Pack of the Fallen" chests. A loot window holds at most 18 items, so extra chests are spawned
+#                     in a ring around the body when needed. Enchants, gems, durability and the crafter are kept.
+#        Default:     1 - Enabled
+#                     0 - Disabled
+#
+
+HardcoreHighRisk.LootDrop.Enable = 1
+
+#
+#    HardcoreHighRisk.LootDrop.ChestDuration
+#        Description: Seconds before an unlooted chest despawns. A chest despawns at once when emptied.
+#        Default:     60
+#
+
+HardcoreHighRisk.LootDrop.ChestDuration = 60
+
+#
+#    HardcoreHighRisk.LootDrop.DropGold
+#        Description: Put the character's money into the first gear chest.
+#        Default:     1 - Enabled
+#                     0 - Disabled (money stays on the character)
+#
+
+HardcoreHighRisk.LootDrop.DropGold = 1
+
+#
+#    HardcoreHighRisk.LootDrop.GearChestEntry
+#    HardcoreHighRisk.LootDrop.InventoryChestEntry
+#        Description: gameobject_template entries for the two chest kinds (created by this module's SQL).
+#        Default:     601000, 601001
+#
+
+HardcoreHighRisk.LootDrop.GearChestEntry = 601000
+HardcoreHighRisk.LootDrop.InventoryChestEntry = 601001
+
+#
+#    HardcoreHighRisk.ForceRandomBotsHardcore
+#        Description: Treat every random bot (characters on the playerbots random-bot accounts, addclass bots
+#                     included) as hardcore. On death its belongings drop and RandomBotDeathAction is applied.
+#        Default:     0 - Disabled
+#                     1 - Enabled
+#
+
+HardcoreHighRisk.ForceRandomBotsHardcore = 0
+
+#
+#    HardcoreHighRisk.ForceAltBotsHardcore
+#        Description: Treat every altbot (a character on a real account controlled by playerbots, mod-pbc
+#                     companions included) as hardcore. On death its belongings drop and it suffers permadeath:
+#                     it is taken out of the group, logged out, and refused at every later login
+#                     (.playerbots bot add, bot autologin, ...). The character and its data stay in the database.
+#                     Altbots flagged hardcore at the Shrine of Challenge get the same permadeath even when this
+#                     option is off. A character you log into yourself is not a bot and only follows its shrine flag.
+#                     To bring a fallen altbot back, delete its "mod-hardcore-high-risk" row in character_settings
+#                     (and clear the challenge-modes dead flag if it was shrine-flagged).
+#        Default:     0 - Disabled
+#                     1 - Enabled
+#
+
+HardcoreHighRisk.ForceAltBotsHardcore = 0
+
+#
+#    HardcoreHighRisk.RandomBotDeathAction
+#        Description: What happens to a hardcore random bot after it dies.
+#        Default:     0 - Reset: resurrect at the starting level, re-gear, send to its race's starting zone
+#                     1 - Retire: log out and delete the character (playerbots creates new bots on a later startup)
+#
+
+HardcoreHighRisk.RandomBotDeathAction = 0
+
+#
+#    HardcoreHighRisk.BotDeathActionDelay
+#        Description: Seconds after a bot's death before its reset, retire or permadeath logout runs.
+#        Default:     5
+#
+
+HardcoreHighRisk.BotDeathActionDelay = 5
