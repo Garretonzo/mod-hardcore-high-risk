@@ -24,9 +24,9 @@ namespace
             return;
         }
 
-        CharacterDatabase.Execute("REPLACE INTO `mod_hardcore_high_risk_character` (`guid`, `hardcore`, `dead`, "
-            "`pending_bot_death`) VALUES ({}, {}, {}, {})",
-            guid, uint32(state.hardcore), uint32(state.dead), uint32(state.pendingBotDeath));
+        CharacterDatabase.Execute("REPLACE INTO `mod_hardcore_high_risk_character` "
+            "(`guid`, `dead`, `pending_bot_death`) VALUES ({}, {}, {})",
+            guid, uint32(state.dead), uint32(state.pendingBotDeath));
     }
 
     template<class Change>
@@ -61,7 +61,7 @@ namespace HardcoreState
         std::unique_lock<std::shared_mutex> guard(stateLock);
         states.clear();
 
-        QueryResult result = CharacterDatabase.Query("SELECT `guid`, `hardcore`, `dead`, `pending_bot_death` "
+        QueryResult result = CharacterDatabase.Query("SELECT `guid`, `dead`, `pending_bot_death` "
             "FROM `mod_hardcore_high_risk_character`");
         if (!result)
             return;
@@ -70,9 +70,8 @@ namespace HardcoreState
         {
             Field* fields = result->Fetch();
             HardcoreCharacterState state;
-            state.hardcore = fields[1].Get<uint8>() != 0;
-            state.dead = fields[2].Get<uint8>() != 0;
-            state.pendingBotDeath = fields[3].Get<uint8>() != 0;
+            state.dead = fields[1].Get<uint8>() != 0;
+            state.pendingBotDeath = fields[2].Get<uint8>() != 0;
             if (!state.IsEmpty())
                 states[fields[0].Get<uint32>()] = state;
         } while (result->NextRow());
@@ -85,11 +84,6 @@ namespace HardcoreState
         std::shared_lock<std::shared_mutex> guard(stateLock);
         auto itr = states.find(guid);
         return itr != states.end() ? itr->second : HardcoreCharacterState();
-    }
-
-    void SetHardcore(ObjectGuid::LowType guid, bool value)
-    {
-        Modify(guid, [value](HardcoreCharacterState& state) { state.hardcore = value; });
     }
 
     void SetDead(ObjectGuid::LowType guid, bool value)

@@ -11,11 +11,10 @@
 // One row of `mod_hardcore_high_risk_character`. Characters without a row have every field false.
 struct HardcoreCharacterState
 {
-    bool hardcore = false;        // opted in at the shrine
     bool dead = false;            // permadeath: never resurrected again
     bool pendingBotDeath = false; // random bot died and still owes its reset or retire
 
-    [[nodiscard]] bool IsEmpty() const { return !hardcore && !dead && !pendingBotDeath; }
+    [[nodiscard]] bool IsEmpty() const { return !dead && !pendingBotDeath; }
     bool operator==(HardcoreCharacterState const&) const = default;
 };
 
@@ -27,7 +26,6 @@ namespace HardcoreState
 
     [[nodiscard]] HardcoreCharacterState Get(ObjectGuid::LowType guid);
 
-    void SetHardcore(ObjectGuid::LowType guid, bool value);
     void SetDead(ObjectGuid::LowType guid, bool value);
     void SetPendingBotDeath(ObjectGuid::LowType guid, bool value);
     void Clear(ObjectGuid::LowType guid);

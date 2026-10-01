@@ -11,5 +11,5 @@ void Addmod_hardcore_high_riskScripts()
 {
     AddSC_hardcore_high_risk();
     AddSC_hardcore_loot_drop();
-    AddSC_hardcore_shrine();
+    AddSC_hardcore_death_context();
 }

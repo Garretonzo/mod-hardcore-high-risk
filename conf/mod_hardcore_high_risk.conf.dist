@@ -8,15 +8,18 @@
 # mod-hardcore-high-risk
 ########################################
 #
-# A character is hardcore when it chose so at the Shrine of the Hardcore, or through one of the bot force
-# options below. Hardcore state lives in acore_characters.mod_hardcore_high_risk_character.
+# Turns the realm into a hardcore realm: when the module is enabled, every character in the populations
+# enabled below is hardcore. There is nothing to opt into. Hardcore deaths are kept in
+# acore_characters.mod_hardcore_high_risk_character.
 #
 # When a hardcore character dies, everything it carried drops into chests next to its body (see LootDrop).
 # Real players and altbots then stay on as permanent ghosts: they can still log in, move around and talk
-# (say goodbye), but nothing can resurrect them. Random bots are reset or retired instead (see
-# RandomBotDeathAction).
+# (say goodbye), but nothing can resurrect them; resurrection spells and soulstones are refused. Fallen altbots
+# release at once into a ghost at their body and keep following their master. With mod-pbc installed, the
+# fallen companion and its group's companions get a permanent memory of how it died. Random bots are reset or
+# retired instead (see RandomBotDeathAction).
 #
-# To bring a fallen character back, or to take hardcore away again, delete its row:
+# To bring a fallen character back, delete its row and restart the worldserver:
 #     DELETE FROM mod_hardcore_high_risk_character WHERE guid = <character guid>;
 #
 #    HardcoreHighRisk.Enable
@@ -28,15 +31,33 @@
 HardcoreHighRisk.Enable = 1
 
 #
-#    HardcoreHighRisk.Shrine.Enable
-#        Description: Show the Shrine of the Hardcore in the starting zones. Only a character that is still at the
-#                     starting level (death knights: their starting level) and not hardcore yet can see it. Talking
-#                     to it and confirming the warning makes the character hardcore, for good.
+#    HardcoreHighRisk.Players
+#        Description: Real players (anyone playing with a game client) are hardcore. Includes game masters.
 #        Default:     1 - Enabled
-#                     0 - Disabled (nobody can opt in; the bot force options still work)
+#                     0 - Disabled
 #
 
-HardcoreHighRisk.Shrine.Enable = 1
+HardcoreHighRisk.Players = 1
+
+#
+#    HardcoreHighRisk.AltBots
+#        Description: Altbots are hardcore: characters on real accounts controlled by mod-playerbots, mod-pbc
+#                     companions included. A fallen altbot becomes a ghost that keeps following its master.
+#        Default:     1 - Enabled
+#                     0 - Disabled
+#
+
+HardcoreHighRisk.AltBots = 1
+
+#
+#    HardcoreHighRisk.RandomBots
+#        Description: Random bots are hardcore: characters on the playerbots random-bot accounts, addclass bots
+#                     included. On death their belongings drop and RandomBotDeathAction is applied.
+#        Default:     1 - Enabled
+#                     0 - Disabled
+#
+
+HardcoreHighRisk.RandomBots = 1
 
 #
 #    HardcoreHighRisk.LootDrop.Enable
@@ -76,29 +97,6 @@ HardcoreHighRisk.LootDrop.DropGold = 1
 
 HardcoreHighRisk.LootDrop.GearChestEntry = 601000
 HardcoreHighRisk.LootDrop.InventoryChestEntry = 601001
-
-#
-#    HardcoreHighRisk.ForceRandomBotsHardcore
-#        Description: Treat every random bot (characters on the playerbots random-bot accounts, addclass bots
-#                     included) as hardcore. On death its belongings drop and RandomBotDeathAction is applied.
-#        Default:     0 - Disabled
-#                     1 - Enabled
-#
-
-HardcoreHighRisk.ForceRandomBotsHardcore = 0
-
-#
-#    HardcoreHighRisk.ForceAltBotsHardcore
-#        Description: Treat every altbot (a character on a real account controlled by playerbots, mod-pbc
-#                     companions included) as hardcore. On death its belongings drop and it becomes a permanent
-#                     ghost, just like a real player: it stays in the group, follows and talks, but is never
-#                     resurrected. Altbots that chose hardcore at the shrine behave the same way even when this
-#                     option is off.
-#        Default:     0 - Disabled
-#                     1 - Enabled
-#
-
-HardcoreHighRisk.ForceAltBotsHardcore = 0
 
 #
 #    HardcoreHighRisk.RandomBotDeathAction

@@ -7,6 +7,8 @@
 
 #include "ConfigValueCache.h"
 #include "ObjectGuid.h"
+#include <string>
+#include <vector>
 
 #if __has_include("Playerbots.h")
 #define HARDCORE_HIGH_RISK_PLAYERBOTS 1
@@ -15,18 +17,19 @@
 #endif
 
 class Player;
+class Unit;
 
 enum class HardcoreHighRiskConfig
 {
     ENABLED,
-    SHRINE_ENABLED,
+    HARDCORE_PLAYERS,
+    HARDCORE_ALT_BOTS,
+    HARDCORE_RANDOM_BOTS,
     LOOT_DROP_ENABLED,
     LOOT_DROP_CHEST_DURATION,
     LOOT_DROP_GOLD,
     LOOT_DROP_GEAR_CHEST_ENTRY,
     LOOT_DROP_INVENTORY_CHEST_ENTRY,
-    FORCE_RANDOM_BOTS_HARDCORE,
-    FORCE_ALT_BOTS_HARDCORE,
     RANDOM_BOT_DEATH_ACTION,
     BOT_DEATH_ACTION_DELAY,
 
@@ -59,14 +62,14 @@ namespace HardcoreHighRisk
 
     bool IsEnabled();
 
-    // Bot classification. A bot session is any character driven by mod-playerbots (no game client).
+    // Populations. A bot session is any character driven by mod-playerbots (no game client).
     // "Random" bots live on the playerbots random-bot accounts (random bots and addclass bots);
     // every other bot is an altbot: a character on a real account, mod-pbc companions included.
     bool IsBotSession(Player const* player);
     bool IsRandomAccountBot(Player const* player);
     bool IsAltBot(Player const* player);
 
-    // Hardcore by the shrine or by one of the force options.
+    // Hardcore by config: the whole realm, per population.
     bool IsHardcore(Player const* player);
 
     // Fallen for good: never resurrected again.
@@ -79,17 +82,51 @@ namespace HardcoreLootDrop
     void Update(uint32 diff);
 }
 
-// Random-bot reset/retire and the altbot master notice; empty without mod-playerbots.
+// How a hardcore character died, captured at the killing blow and turned into narration.
+namespace HardcoreDeathContext
+{
+    class DeathStory
+    {
+    public:
+        // Second person, for the fallen character itself.
+        [[nodiscard]] std::string ForSelf() const;
+        // Third person, for a companion; the companion appears as "you" among those present.
+        [[nodiscard]] std::string ForCompanion(std::string const& companionName) const;
+
+        std::string name;
+        std::string date;
+        std::string place;
+        uint8 level = 0;
+        std::string cause;                 // "slain by a level 10 elite Defias Overseer", "by drowning", ...
+        std::string doing;                 // " while fighting ... for the quest ...", may be empty
+        std::vector<std::string> present;  // group members close by
+    };
+
+    // Called at the killing blow (inside Unit::Kill), before OnPlayerJustDied.
+    void Capture(Player* victim, Unit* killer);
+    // Takes the captured story, or builds a minimal one when nothing was captured.
+    DeathStory Take(Player* victim);
+}
+
+// Writes permanent memories into mod-pbc; no-op without mod-pbc.
+namespace HardcorePbc
+{
+    void AddMemory(ObjectGuid::LowType characterGuid, std::string const& text);
+}
+
+// Random-bot reset/retire and altbot ghosts; empty without mod-playerbots.
 namespace HardcoreBotDeath
 {
     void OnRandomBotDeath(Player* bot);
     void OnRandomBotLogin(Player* bot);
     void OnAltBotFallen(Player* bot);
+    // Keeps a fallen altbot a following ghost (re-applied after logins, which reset bot strategies).
+    void MaintainAltBotGhost(Player* bot);
     void Update(uint32 diff);
 }
 
 void AddSC_hardcore_high_risk();
 void AddSC_hardcore_loot_drop();
-void AddSC_hardcore_shrine();
+void AddSC_hardcore_death_context();
 
 #endif

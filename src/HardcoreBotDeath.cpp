@@ -31,7 +31,11 @@ namespace
     {
         RandomBotDeath,  // random-account bot died: reset or retire per config
         DeleteCharacter, // retire, second step: delete once the bot is offline
+        AltBotGhost,     // fallen altbot: release into a ghost at its body and follow the master
     };
+
+    // A fallen altbot releases this long after dying (never inside the KillPlayer hook itself).
+    constexpr Milliseconds ALT_BOT_GHOST_DELAY = 1s;
 
     struct PendingBotAction
     {
@@ -189,6 +193,16 @@ namespace
                 return ProcessRandomBotDeath(guid);
             case PendingAction::DeleteCharacter:
                 return DeleteCharacter(guid, pending.accountId);
+            case PendingAction::AltBotGhost:
+            {
+                // Offline: the sweep finishes the job after its next login.
+                Player* bot = ObjectAccessor::FindConnectedPlayer(guid);
+                if (!bot)
+                    return true;
+
+                HardcoreBotDeath::MaintainAltBotGhost(bot);
+                return bot->HasPlayerFlag(PLAYER_FLAGS_GHOST);
+            }
         }
 
         return true;
@@ -223,6 +237,24 @@ namespace HardcoreBotDeath
             ChatHandler(master->GetSession()).SendSysMessage(
                 Acore::StringFormat("{} has fallen. They remain as a ghost.", bot->GetName()));
         }
+
+        QueueAction(bot->GetGUID(), PendingAction::AltBotGhost, ALT_BOT_GHOST_DELAY);
+    }
+
+    void MaintainAltBotGhost(Player* bot)
+    {
+        PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
+        if (!botAI || !bot->IsInWorld() || bot->IsBeingTeleported())
+            return;
+
+        // A ghost right where it fell (no graveyard teleport), so it can stay with its group.
+        if (bot->getDeathState() == DeathState::Corpse && !bot->HasPlayerFlag(PLAYER_FLAGS_GHOST))
+            bot->BuildPlayerRepop();
+
+        // Without the "dead" strategy it no longer runs to its corpse, retries revives or accepts resurrects;
+        // the dead engine's "follow" keeps it with the master. Logins reset strategies, hence the re-check.
+        if (botAI->HasStrategy("dead", BOT_STATE_DEAD))
+            botAI->ChangeStrategy("-dead,-stay,+follow", BOT_STATE_DEAD);
     }
 
     void Update(uint32 diff)
@@ -274,6 +306,7 @@ namespace HardcoreBotDeath
     void OnRandomBotDeath(Player* /*bot*/) { }
     void OnRandomBotLogin(Player* /*bot*/) { }
     void OnAltBotFallen(Player* /*bot*/) { }
+    void MaintainAltBotGhost(Player* /*bot*/) { }
     void Update(uint32 /*diff*/) { }
 }
 
