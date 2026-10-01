@@ -19,6 +19,7 @@ class Player;
 enum class HardcoreHighRiskConfig
 {
     ENABLED,
+    SHRINE_ENABLED,
     LOOT_DROP_ENABLED,
     LOOT_DROP_CHEST_DURATION,
     LOOT_DROP_GOLD,
@@ -30,13 +31,6 @@ enum class HardcoreHighRiskConfig
     BOT_DEATH_ACTION_DELAY,
 
     NUM_CONFIGS,
-};
-
-// Indexes into this module's character_settings row (source "mod-hardcore-high-risk")
-enum HardcoreHighRiskSetting : uint8
-{
-    SETTING_PERMADEAD                = 0, // altbot permadeath: refused at every login, never resurrected
-    SETTING_PENDING_RANDOM_BOT_DEATH = 1, // random bot died and still owes its reset/retire
 };
 
 enum class RandomBotDeathAction : uint32
@@ -57,9 +51,6 @@ extern HardcoreHighRiskConfigData hardcoreHighRiskConfig;
 
 namespace HardcoreHighRisk
 {
-    constexpr char const* SETTING_SOURCE = "mod-hardcore-high-risk";
-    constexpr char const* CHALLENGE_MODES_SOURCE = "mod-challenge-modes";
-
     template<class T>
     T GetConfig(HardcoreHighRiskConfig config)
     {
@@ -71,19 +62,15 @@ namespace HardcoreHighRisk
     // Bot classification. A bot session is any character driven by mod-playerbots (no game client).
     // "Random" bots live on the playerbots random-bot accounts (random bots and addclass bots);
     // every other bot is an altbot: a character on a real account, mod-pbc companions included.
-    bool IsBotSession(Player* player);
-    bool IsRandomAccountBot(Player* player);
-    bool IsAltBot(Player* player);
+    bool IsBotSession(Player const* player);
+    bool IsRandomAccountBot(Player const* player);
+    bool IsAltBot(Player const* player);
 
-    // Hardcore by the challenge-modes shrine flag or by one of this module's force options.
-    bool IsHardcore(Player* player);
+    // Hardcore by the shrine or by one of the force options.
+    bool IsHardcore(Player const* player);
 
-    // Dead for good: this module's permadeath flag, or challenge-modes' HARDCORE + HARDCORE_DEAD flags.
-    bool IsPermaDead(Player* player);
-    bool IsPermaDead(ObjectGuid guid);
-
-    // Writes one of this module's settings both in memory and straight to the DB.
-    void SetModuleSetting(Player* player, HardcoreHighRiskSetting setting, uint32 value);
+    // Fallen for good: never resurrected again.
+    bool IsPermaDead(Player const* player);
 }
 
 namespace HardcoreLootDrop
@@ -92,16 +79,17 @@ namespace HardcoreLootDrop
     void Update(uint32 diff);
 }
 
+// Random-bot reset/retire and the altbot master notice; empty without mod-playerbots.
 namespace HardcoreBotDeath
 {
-    void OnHardcoreDeath(Player* player);
-    void OnLogin(Player* player);
-    bool CanResurrect(Player* player);
+    void OnRandomBotDeath(Player* bot);
+    void OnRandomBotLogin(Player* bot);
+    void OnAltBotFallen(Player* bot);
     void Update(uint32 diff);
 }
 
 void AddSC_hardcore_high_risk();
 void AddSC_hardcore_loot_drop();
-void AddSC_hardcore_bot_death();
+void AddSC_hardcore_shrine();
 
 #endif

@@ -3,16 +3,13 @@
  */
 
 #include "HardcoreHighRisk.h"
-#include "ChallengeModes.h"
 #include "Player.h"
-#include "ScriptMgr.h"
-#include "WorldSession.h"
 
 #if HARDCORE_HIGH_RISK_PLAYERBOTS
 #include "CalendarMgr.h"
-#include "CharacterCache.h"
 #include "Chat.h"
 #include "Group.h"
+#include "HardcoreState.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "PlayerbotAI.h"
@@ -20,10 +17,10 @@
 #include "PlayerbotMgr.h"
 #include "Playerbots.h"
 #include "RandomPlayerbotMgr.h"
+#include "ScriptMgr.h"
 #include "StringFormat.h"
-#include "Tokenize.h"
-#include "Util.h"
 #include "World.h"
+#include "WorldSession.h"
 #include "WorldSessionMgr.h"
 #include <mutex>
 #include <unordered_map>
@@ -32,10 +29,8 @@ namespace
 {
     enum class PendingAction : uint8
     {
-        AltBotPermaDeath, // altbot just died: tell the master, take it out of the group, log it out
-        RefuseLogin,      // a permadead altbot came online by some path: same, with a refusal message
-        RandomBotDeath,   // random-account bot died: reset or retire per config
-        DeleteCharacter,  // retire, second step: delete once the bot is offline
+        RandomBotDeath,  // random-account bot died: reset or retire per config
+        DeleteCharacter, // retire, second step: delete once the bot is offline
     };
 
     struct PendingBotAction
@@ -85,14 +80,6 @@ namespace
         return nullptr;
     }
 
-    void TellMaster(Player* bot, std::string const& text)
-    {
-        PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
-        Player* master = botAI ? botAI->GetMaster() : nullptr;
-        if (master && master != bot && master->GetSession())
-            ChatHandler(master->GetSession()).SendSysMessage(text);
-    }
-
     // Returns true once the bot is offline.
     bool LogoutBot(ObjectGuid guid)
     {
@@ -112,33 +99,14 @@ namespace
         return !ObjectAccessor::FindConnectedPlayer(guid);
     }
 
-    bool ProcessAltBotLogout(ObjectGuid guid, PendingAction action)
-    {
-        Player* bot = ObjectAccessor::FindConnectedPlayer(guid);
-        if (!bot)
-            return true;
-
-        if (!FindHolder(bot))
-            return false;
-
-        std::string const text = action == PendingAction::RefuseLogin
-            ? Acore::StringFormat("{} fell in hardcore and cannot return.", bot->GetName())
-            : Acore::StringFormat("{} has fallen and is gone forever.", bot->GetName());
-        TellMaster(bot, text);
-
-        return LogoutBot(guid);
-    }
-
     bool ResetRandomBot(Player* bot)
     {
         PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
         if (!botAI || !bot->IsInWorld() || bot->IsBeingTeleported())
             return false;
 
-        // Clear the shrine flags first, otherwise the resurrect is blocked (IsPermaDead) or undone by challenge-modes.
-        bot->UpdatePlayerSetting(HardcoreHighRisk::CHALLENGE_MODES_SOURCE, SETTING_HARDCORE, 0);
-        bot->UpdatePlayerSetting(HardcoreHighRisk::CHALLENGE_MODES_SOURCE, HARDCORE_DEAD, 0);
-        HardcoreHighRisk::SetModuleSetting(bot, SETTING_PENDING_RANDOM_BOT_DEATH, 0);
+        // A fresh start: no longer hardcore, dead or pending (force options can make it hardcore again).
+        HardcoreState::Clear(bot->GetGUID().GetCounter());
 
         if (!bot->IsAlive())
         {
@@ -205,7 +173,7 @@ namespace
         if (ObjectAccessor::FindConnectedPlayer(guid))
             return false;
 
-        // Same steps as WorldSession::HandleCharDeleteOpcode.
+        // Same steps as WorldSession::HandleCharDeleteOpcode. DeleteFromDB also drops the module's state row.
         sScriptMgr->OnPlayerDelete(guid, accountId);
         sCalendarMgr->RemoveAllPlayerEventsAndInvites(guid);
         Player::DeleteFromDB(guid.GetCounter(), accountId, true, true);
@@ -217,9 +185,6 @@ namespace
     {
         switch (pending.action)
         {
-            case PendingAction::AltBotPermaDeath:
-            case PendingAction::RefuseLogin:
-                return ProcessAltBotLogout(guid, pending.action);
             case PendingAction::RandomBotDeath:
                 return ProcessRandomBotDeath(guid);
             case PendingAction::DeleteCharacter:
@@ -232,68 +197,32 @@ namespace
 
 namespace HardcoreBotDeath
 {
-    void OnHardcoreDeath(Player* player)
+    void OnRandomBotDeath(Player* bot)
     {
-        if (!HardcoreHighRisk::IsBotSession(player))
-            return;
+        HardcoreState::SetPendingBotDeath(bot->GetGUID().GetCounter(), true);
 
         Milliseconds const delay = Seconds(
             HardcoreHighRisk::GetConfig<uint32>(HardcoreHighRiskConfig::BOT_DEATH_ACTION_DELAY));
-
-        if (HardcoreHighRisk::IsAltBot(player))
-        {
-            HardcoreHighRisk::SetModuleSetting(player, SETTING_PERMADEAD, 1);
-            QueueAction(player->GetGUID(), PendingAction::AltBotPermaDeath, delay);
-        }
-        else if (HardcoreHighRisk::IsRandomAccountBot(player))
-        {
-            HardcoreHighRisk::SetModuleSetting(player, SETTING_PENDING_RANDOM_BOT_DEATH, 1);
-            QueueAction(player->GetGUID(), PendingAction::RandomBotDeath, delay);
-        }
+        QueueAction(bot->GetGUID(), PendingAction::RandomBotDeath, delay);
     }
 
-    void OnLogin(Player* player)
+    // The bot is not registered with its holder yet, and HandlePlayerBotLoginCallback still uses it after the
+    // login hook, so it is only queued here; Update() acts once playerbots has finished the login.
+    void OnRandomBotLogin(Player* bot)
     {
-        if (!HardcoreHighRisk::IsBotSession(player))
-        {
-            // A real player on a character this module killed for good, e.g. logging into your own fallen altbot.
-            if (player->GetPlayerSetting(HardcoreHighRisk::SETTING_SOURCE, SETTING_PERMADEAD).value)
-            {
-                if (player->IsAlive())
-                    player->KillPlayer();
-
-                player->GetSession()->KickPlayer("Hardcore character has fallen");
-            }
-
-            return;
-        }
-
-        // The bot is not registered with its holder yet and HandlePlayerBotLoginCallback still uses it after this
-        // hook, so it is only flagged here; Update() logs it out once playerbots has finished the login.
-        if (HardcoreHighRisk::IsRandomAccountBot(player))
-        {
-            bool const pending =
-                player->GetPlayerSetting(HardcoreHighRisk::SETTING_SOURCE, SETTING_PENDING_RANDOM_BOT_DEATH).value;
-            if (pending || HardcoreHighRisk::IsPermaDead(player))
-                QueueAction(player->GetGUID(), PendingAction::RandomBotDeath, 0ms);
-
-            return;
-        }
-
-        if (HardcoreHighRisk::IsPermaDead(player))
-        {
-            if (player->IsAlive())
-                player->KillPlayer();
-
-            QueueAction(player->GetGUID(), PendingAction::RefuseLogin, 0ms);
-        }
+        if (HardcoreState::Get(bot->GetGUID().GetCounter()).pendingBotDeath)
+            QueueAction(bot->GetGUID(), PendingAction::RandomBotDeath, 0ms);
     }
 
-    bool CanResurrect(Player* player)
+    void OnAltBotFallen(Player* bot)
     {
-        // challenge-modes' kick cannot remove a bot (no socket), so a permadead bot would revive and be re-killed
-        // forever. Real players keep challenge-modes' own handling.
-        return !(HardcoreHighRisk::IsBotSession(player) && HardcoreHighRisk::IsPermaDead(player));
+        PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
+        Player* master = botAI ? botAI->GetMaster() : nullptr;
+        if (master && master != bot && master->GetSession())
+        {
+            ChatHandler(master->GetSession()).SendSysMessage(
+                Acore::StringFormat("{} has fallen. They remain as a ghost.", bot->GetName()));
+        }
     }
 
     void Update(uint32 diff)
@@ -337,95 +266,15 @@ namespace HardcoreBotDeath
     }
 }
 
-// Layer one of the re-add guard: refuse fallen altbots before playerbots logs them in, so there is no login,
-// no greeting and no party invite. Other paths (autologin, addaccount, mod-pbc) are caught by OnLogin.
-class HardcoreBotDeathCommandScript : public AllCommandScript
-{
-public:
-    HardcoreBotDeathCommandScript() : AllCommandScript("HardcoreBotDeathCommandScript", {
-        ALLCOMMANDHOOK_ON_TRY_EXECUTE_COMMAND
-    }) { }
-
-    bool OnTryExecuteCommand(ChatHandler& handler, std::string_view cmdStr) override
-    {
-        if (!HardcoreHighRisk::IsEnabled() || !handler.GetSession())
-            return true;
-
-        // ".playerbots bot add|login <name[,name...]>"; the command parser accepts unambiguous prefixes.
-        std::vector<std::string_view> const tokens = Acore::Tokenize(cmdStr, ' ', false);
-        if (tokens.size() != 4 || !StringStartsWithI("playerbots", tokens[0]) || !StringStartsWithI("bot", tokens[1]))
-            return true;
-
-        if (tokens[2] != "add" && tokens[2] != "login")
-            return true;
-
-        std::vector<std::string> fallen;
-        std::string remaining;
-        for (std::string_view const name : Acore::Tokenize(tokens[3], ',', false))
-        {
-            std::string normalized(name);
-            if (normalizePlayerName(normalized))
-            {
-                ObjectGuid const guid = sCharacterCache->GetCharacterGuidByName(normalized);
-                if (guid && HardcoreHighRisk::IsPermaDead(guid))
-                {
-                    fallen.push_back(normalized);
-                    continue;
-                }
-            }
-
-            if (!remaining.empty())
-                remaining += ',';
-            remaining += name;
-        }
-
-        if (fallen.empty())
-            return true;
-
-        for (std::string const& name : fallen)
-            handler.PSendSysMessage("{} fell in hardcore and cannot return.", name);
-
-        if (!remaining.empty())
-        {
-            std::string args = Acore::StringFormat("{} {}", tokens[2], remaining);
-            PlayerbotMgr::HandlePlayerbotMgrCommand(&handler, args.data());
-        }
-
-        return false;
-    }
-};
-
-void AddSC_hardcore_bot_death()
-{
-    new HardcoreBotDeathCommandScript();
-}
-
 #else
 
-// Without mod-playerbots there are no bot sessions; only the real-player login guard applies.
+// Without mod-playerbots there are no bot sessions.
 namespace HardcoreBotDeath
 {
-    void OnHardcoreDeath(Player* /*player*/) { }
-
-    void OnLogin(Player* player)
-    {
-        if (!player->GetPlayerSetting(HardcoreHighRisk::SETTING_SOURCE, SETTING_PERMADEAD).value)
-            return;
-
-        if (player->IsAlive())
-            player->KillPlayer();
-
-        player->GetSession()->KickPlayer("Hardcore character has fallen");
-    }
-
-    bool CanResurrect(Player* /*player*/)
-    {
-        return true;
-    }
-
+    void OnRandomBotDeath(Player* /*bot*/) { }
+    void OnRandomBotLogin(Player* /*bot*/) { }
+    void OnAltBotFallen(Player* /*bot*/) { }
     void Update(uint32 /*diff*/) { }
 }
-
-void AddSC_hardcore_bot_death() { }
 
 #endif

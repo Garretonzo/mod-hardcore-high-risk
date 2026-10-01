@@ -8,8 +8,16 @@
 # mod-hardcore-high-risk
 ########################################
 #
-# Requires mod-challenge-modes and PlayerSettings.Enable = 1 in worldserver.conf.
-# "Hardcore" means the challenge-modes hardcore flag (Shrine of Challenge) or one of the force options below.
+# A character is hardcore when it chose so at the Shrine of the Hardcore, or through one of the bot force
+# options below. Hardcore state lives in acore_characters.mod_hardcore_high_risk_character.
+#
+# When a hardcore character dies, everything it carried drops into chests next to its body (see LootDrop).
+# Real players and altbots then stay on as permanent ghosts: they can still log in, move around and talk
+# (say goodbye), but nothing can resurrect them. Random bots are reset or retired instead (see
+# RandomBotDeathAction).
+#
+# To bring a fallen character back, or to take hardcore away again, delete its row:
+#     DELETE FROM mod_hardcore_high_risk_character WHERE guid = <character guid>;
 #
 #    HardcoreHighRisk.Enable
 #        Description: Master switch for the whole module.
@@ -18,6 +26,17 @@
 #
 
 HardcoreHighRisk.Enable = 1
+
+#
+#    HardcoreHighRisk.Shrine.Enable
+#        Description: Show the Shrine of the Hardcore in the starting zones. Only a character that is still at the
+#                     starting level (death knights: their starting level) and not hardcore yet can see it. Talking
+#                     to it and confirming the warning makes the character hardcore, for good.
+#        Default:     1 - Enabled
+#                     0 - Disabled (nobody can opt in; the bot force options still work)
+#
+
+HardcoreHighRisk.Shrine.Enable = 1
 
 #
 #    HardcoreHighRisk.LootDrop.Enable
@@ -71,13 +90,10 @@ HardcoreHighRisk.ForceRandomBotsHardcore = 0
 #
 #    HardcoreHighRisk.ForceAltBotsHardcore
 #        Description: Treat every altbot (a character on a real account controlled by playerbots, mod-pbc
-#                     companions included) as hardcore. On death its belongings drop and it suffers permadeath:
-#                     it is taken out of the group, logged out, and refused at every later login
-#                     (.playerbots bot add, bot autologin, ...). The character and its data stay in the database.
-#                     Altbots flagged hardcore at the Shrine of Challenge get the same permadeath even when this
-#                     option is off. A character you log into yourself is not a bot and only follows its shrine flag.
-#                     To bring a fallen altbot back, delete its "mod-hardcore-high-risk" row in character_settings
-#                     (and clear the challenge-modes dead flag if it was shrine-flagged).
+#                     companions included) as hardcore. On death its belongings drop and it becomes a permanent
+#                     ghost, just like a real player: it stays in the group, follows and talks, but is never
+#                     resurrected. Altbots that chose hardcore at the shrine behave the same way even when this
+#                     option is off.
 #        Default:     0 - Disabled
 #                     1 - Enabled
 #
@@ -95,7 +111,7 @@ HardcoreHighRisk.RandomBotDeathAction = 0
 
 #
 #    HardcoreHighRisk.BotDeathActionDelay
-#        Description: Seconds after a bot's death before its reset, retire or permadeath logout runs.
+#        Description: Seconds after a random bot's death before its reset or retire runs.
 #        Default:     5
 #
 

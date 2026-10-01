@@ -1,35 +1,43 @@
 # mod-hardcore-high-risk
 
-Raises the stakes of [mod-challenge-modes](https://github.com/ZhengPeiRu21/mod-challenge-modes) hardcore for players and playerbots.
+A standalone hardcore mode for AzerothCore (3.3.5a), for players and playerbots alike.
 
 ## Features
 
-- **Loot drop.** When a hardcore character dies, all equipped gear, bags, bag contents, keyring and (optionally) gold drop into chests next to the body. Anyone can loot them.
+- **Opt in at the Shrine of the Hardcore.** One shrine stands in each starting zone.
+  - Only a character still at its starting level (death knights: theirs) that is not hardcore yet can see it.
+  - Choosing hardcore asks for confirmation, and it cannot be undone.
+- **Permanent death.** A fallen hardcore character becomes a permanent ghost. It can still log in, run around and chat, so it can say goodbye, but nothing resurrects it: no spirit healer, corpse run, spell, battleground or GM command.
+- **Everything drops.** On death, all equipped gear, bags, bag contents, the keyring and (optionally) gold drop into chests next to the body, and anyone can loot them.
   - "Gear of the Fallen" holds equipped gear and gold, and "Pack of the Fallen" holds the inventory.
-  - A loot window shows at most 18 items, so extra chests are spawned when needed, spaced in a ring so each one can be clicked.
+  - A loot window shows at most 18 items, so extra chests spawn when needed, spaced in a ring so each one can be clicked.
   - Chests despawn after `LootDrop.ChestDuration` seconds (default 60), or as soon as they are emptied.
   - Enchants, gems, durability, crafter and spell charges are restored on the looted item.
   - Gift-wrapped items stay on the character.
-- **Bots die for real.** mod-challenge-modes enforces permadeath with a kick, which does nothing to a playerbot (no client connection). A dead hardcore bot would revive and be re-killed forever, and `.playerbots bot add` would bring it straight back into the party. This module fixes that for every hardcore bot:
-  - **Altbots** (characters on real accounts, mod-pbc companions included) get permadeath. They are taken out of the group, logged out, and refused at every later login.
-    - `.playerbots bot add|login <names>` refuses fallen names before they log in. The other names in the list are still added.
-    - Any other login path (bot autologin, `addaccount`, other modules) logs the bot straight back out.
+- **Playerbots** (optional, needs mod-playerbots):
+  - **Altbots** (characters on real accounts, mod-pbc companions included) die like real players. They become ghosts that stay in the group, follow and talk, but never revive, and their master gets a "fallen" notice. `.playerbots bot add` brings them back as ghosts.
   - **Random bots** are reset to the starting level and zone, or retired (character deleted), per `RandomBotDeathAction`.
-  - A permadead bot cannot be resurrected by any means.
-- **Force options.** `ForceRandomBotsHardcore` and `ForceAltBotsHardcore` make bots hardcore without the shrine.
+  - `ForceRandomBotsHardcore` and `ForceAltBotsHardcore` make bots hardcore without the shrine.
 
 ## Requirements
 
-- `mod-challenge-modes`
-- `PlayerSettings.Enable = 1` in `worldserver.conf`
-- `mod-playerbots` is optional. Without it, only the loot drop applies.
+- AzerothCore with module support.
+- `mod-playerbots` is optional. Without it, the bot features are simply off.
 
 ## Installation
 
-1. Place the module in `modules/mod-hardcore-high-risk` and re-run CMake, then build.
-2. The world SQL (chest templates 601000/601001) is applied by the DB updater.
-3. Copy `conf/mod_hardcore_high_risk.conf.dist` to your module config folder as `mod_hardcore_high_risk.conf` and adjust.
+1. Place the module in `modules/mod-hardcore-high-risk`, re-run CMake and build.
+2. The SQL is applied by the DB updater:
+   - world: the chest templates 601000/601001, the shrine template 254605 with its 9 starting-zone spawns, and `npc_text` 601000;
+   - characters: the `mod_hardcore_high_risk_character` table.
+3. Copy `conf/mod_hardcore_high_risk.conf.dist` to your module config folder as `mod_hardcore_high_risk.conf` and adjust it.
 
-## Reviving a fallen altbot
+## Bringing a character back
 
-Delete its row with `source = 'mod-hardcore-high-risk'` in `acore_characters.character_settings`. If it was shrine-flagged, also clear the challenge-modes dead flag (index 8 of its `mod-challenge-modes` row).
+Delete its row in `acore_characters.mod_hardcore_high_risk_character`. This also removes its hardcore status:
+
+```sql
+DELETE FROM mod_hardcore_high_risk_character WHERE guid = <character guid>;
+```
+
+Then restart the worldserver. The state is loaded at startup.
